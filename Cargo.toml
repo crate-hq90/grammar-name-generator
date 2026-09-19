@@ -1,0 +1,6 @@
+[package]
+name = "namegen"
+version = "0.1.0"
+edition = "2021"
+description = "Generate random names from a small grammar file"
+license = "MIT"

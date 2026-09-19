@@ -1,0 +1,13 @@
+# A small fantasy name grammar.
+# run: namegen examples/fantasy.grammar -n 10
+
+root: <first> " " <last>
+    | <first> " " <epithet>
+
+first: "Bran" | "Eddard" | "Cersei" | "Tyrion" | "Arya" | "Jorah" | "Daenerys"
+
+last: "Stark" | "Lannister" | "Baratheon" | "Targaryen" | "Mormont" | "Tully"
+
+epithet: "the " <trait>
+
+trait: "Bold" | "Quiet" | "Younger" | "Wanderer" | "Unbroken"
