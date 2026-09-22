@@ -1,6 +1,6 @@
 mod parser;
 
-use parser::{Grammar, Part};
+use parser::{Alternative, Grammar, Part};
 use std::env;
 use std::fs;
 use std::process;
@@ -102,6 +102,19 @@ fn print_usage() {
     println!("  -h, --help        show this message");
 }
 
+/// Picks an alternative with probability proportional to its weight.
+fn choose_alternative<'a>(alternatives: &'a [Alternative], rng: &mut Rng) -> &'a Alternative {
+    let total: u32 = alternatives.iter().map(|alt| alt.weight).sum();
+    let mut pick = rng.below(total as usize) as u32;
+    for alt in alternatives {
+        if pick < alt.weight {
+            return alt;
+        }
+        pick -= alt.weight;
+    }
+    alternatives.last().expect("grammar rules always have at least one alternative")
+}
+
 fn expand(grammar: &Grammar, rule: &str, rng: &mut Rng, depth: usize) -> Result<String, String> {
     if depth > 64 {
         return Err(format!(
@@ -114,9 +127,9 @@ fn expand(grammar: &Grammar, rule: &str, rng: &mut Rng, depth: usize) -> Result<
         .get(rule)
         .ok_or_else(|| format!("rule '{}' is not defined", rule))?;
 
-    let choice = &alternatives[rng.below(alternatives.len())];
+    let choice = choose_alternative(alternatives, rng);
     let mut out = String::new();
-    for part in choice {
+    for part in &choice.parts {
         match part {
             Part::Literal(text) => out.push_str(text),
             Part::Reference { name, .. } => {

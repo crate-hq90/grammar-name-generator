@@ -6,7 +6,7 @@ root: <first> " " <last>
 
 first: "Bran" | "Eddard" | "Cersei" | "Tyrion" | "Arya" | "Jorah" | "Daenerys"
 
-last: "Stark" | "Lannister" | "Baratheon" | "Targaryen" | "Mormont" | "Tully"
+last: "Stark":3 | "Lannister":3 | "Baratheon" | "Targaryen" | "Mormont" | "Tully"
 
 epithet: "the " <trait>
 

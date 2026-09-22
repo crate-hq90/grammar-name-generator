@@ -53,6 +53,16 @@ first: "Bran"
      | "Cersei"
 ```
 
+An alternative can carry a weight, written `:N` anywhere in it, to make it
+more or less likely than its unweighted siblings (which default to weight 1):
+
+```
+last: "Stark":3 | "Lannister" | "Targaryen":2
+```
+
+Here `"Stark"` is picked three times as often as `"Lannister"`, and twice as
+often as `"Targaryen"`.
+
 See `examples/fantasy.grammar` for a complete one.
 
 ## Error messages

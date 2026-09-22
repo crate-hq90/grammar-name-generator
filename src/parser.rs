@@ -39,12 +39,21 @@ pub enum Part {
     Reference { name: String, line: usize, col: usize },
 }
 
+/// One branch of a rule, plus how often it should be picked relative to its
+/// siblings. A bare alternative defaults to weight 1; `"Stark":3` is three
+/// times as likely to be chosen as a default-weight sibling.
+#[derive(Debug, Clone)]
+pub struct Alternative {
+    pub parts: Vec<Part>,
+    pub weight: u32,
+}
+
 pub struct Grammar {
-    rules: HashMap<String, Vec<Vec<Part>>>,
+    rules: HashMap<String, Vec<Alternative>>,
 }
 
 impl Grammar {
-    pub fn get(&self, name: &str) -> Option<&Vec<Vec<Part>>> {
+    pub fn get(&self, name: &str) -> Option<&Vec<Alternative>> {
         self.rules.get(name)
     }
 }
@@ -214,12 +223,40 @@ impl Scanner {
         }
         Ok(Part::Reference { name, line, col })
     }
+
+    /// Reads a `:N` weight suffix. The ':' has already been peeked but not
+    /// consumed.
+    fn read_weight(&mut self) -> Result<u32, ParseError> {
+        let line = self.line;
+        let col = self.col;
+        self.advance(); // ':'
+        let mut digits = String::new();
+        while let Some(c) = self.peek() {
+            if c.is_ascii_digit() {
+                digits.push(c);
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        if digits.is_empty() {
+            return Err(self.error("expected a number after ':'"));
+        }
+        let weight: u32 = digits
+            .parse()
+            .map_err(|_| ParseError::new(line, col, format!("weight '{}' is too large", digits)))?;
+        if weight == 0 {
+            return Err(ParseError::new(line, col, "weight must be at least 1, got 0"));
+        }
+        Ok(weight)
+    }
 }
 
-fn parse_alternative(scanner: &mut Scanner) -> Result<Vec<Part>, ParseError> {
+fn parse_alternative(scanner: &mut Scanner) -> Result<Alternative, ParseError> {
     let start_line = scanner.line;
     let start_col = scanner.col;
     let mut parts = Vec::new();
+    let mut weight = None;
 
     loop {
         scanner.skip_inline_space();
@@ -233,9 +270,15 @@ fn parse_alternative(scanner: &mut Scanner) -> Result<Vec<Part>, ParseError> {
                 let reference = scanner.read_reference()?;
                 parts.push(reference);
             }
+            Some(':') => {
+                if weight.is_some() {
+                    return Err(scanner.error("an alternative can only have one weight"));
+                }
+                weight = Some(scanner.read_weight()?);
+            }
             Some(c) => {
                 return Err(scanner.error(format!(
-                    "unexpected character '{}', expected a quoted string or a <rule-reference>",
+                    "unexpected character '{}', expected a quoted string, a <rule-reference>, or a ':weight'",
                     c
                 )));
             }
@@ -250,7 +293,10 @@ fn parse_alternative(scanner: &mut Scanner) -> Result<Vec<Part>, ParseError> {
         ));
     }
 
-    Ok(parts)
+    Ok(Alternative {
+        parts,
+        weight: weight.unwrap_or(1),
+    })
 }
 
 /// Parses a grammar file. A grammar is a set of rules of the form
@@ -259,7 +305,7 @@ fn parse_alternative(scanner: &mut Scanner) -> Result<Vec<Part>, ParseError> {
 /// rule must be named `root`; generation starts there.
 pub fn parse(source: &str) -> Result<Grammar, ParseError> {
     let mut scanner = Scanner::new(source);
-    let mut rules: HashMap<String, Vec<Vec<Part>>> = HashMap::new();
+    let mut rules: HashMap<String, Vec<Alternative>> = HashMap::new();
     let mut rule_positions: HashMap<String, (usize, usize)> = HashMap::new();
 
     loop {
@@ -328,7 +374,7 @@ pub fn parse(source: &str) -> Result<Grammar, ParseError> {
 
     for alts in rules.values() {
         for alt in alts {
-            for part in alt {
+            for part in &alt.parts {
                 if let Part::Reference { name, line, col } = part {
                     if !rules.contains_key(name) {
                         return Err(ParseError::new(
