@@ -390,3 +390,125 @@ pub fn parse(source: &str) -> Result<Grammar, ParseError> {
 
     Ok(Grammar { rules })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn expect_error(source: &str) -> ParseError {
+        parse(source).expect_err("expected a parse error")
+    }
+
+    #[test]
+    fn empty_file_reports_start_of_file() {
+        let err = expect_error("");
+        assert_eq!((err.line, err.col), (1, 1));
+    }
+
+    #[test]
+    fn missing_root_rule_points_at_end_of_file() {
+        let err = expect_error("foo: \"a\"\n");
+        assert_eq!((err.line, err.col), (2, 1));
+    }
+
+    #[test]
+    fn duplicate_rule_name_points_at_second_definition() {
+        let err = expect_error("root: \"a\"\nroot: \"b\"\n");
+        assert_eq!((err.line, err.col), (2, 1));
+        assert!(err.message.contains("already defined at line 1, column 1"));
+    }
+
+    #[test]
+    fn missing_colon_after_rule_name() {
+        let err = expect_error("root \"a\"\n");
+        assert_eq!((err.line, err.col), (1, 6));
+    }
+
+    #[test]
+    fn empty_alternative_points_at_its_start() {
+        let err = expect_error("root: | \"a\"\n");
+        assert_eq!((err.line, err.col), (1, 7));
+    }
+
+    #[test]
+    fn unterminated_string_points_at_opening_quote() {
+        let err = expect_error("root: \"abc\n");
+        assert_eq!((err.line, err.col), (1, 7));
+    }
+
+    #[test]
+    fn unknown_escape_sequence() {
+        let err = expect_error("root: \"a\\qb\"\n");
+        assert_eq!((err.line, err.col), (1, 10));
+    }
+
+    #[test]
+    fn unterminated_escape_at_end_of_file() {
+        let err = expect_error("root: \"a\\");
+        assert_eq!((err.line, err.col), (1, 10));
+    }
+
+    #[test]
+    fn reference_missing_name() {
+        let err = expect_error("root: <>\n");
+        assert_eq!((err.line, err.col), (1, 8));
+    }
+
+    #[test]
+    fn unterminated_reference_points_at_opening_bracket() {
+        let err = expect_error("root: <first\n");
+        assert_eq!((err.line, err.col), (1, 7));
+    }
+
+    #[test]
+    fn weight_missing_digits() {
+        let err = expect_error("root: \"a\": \n");
+        assert_eq!((err.line, err.col), (1, 11));
+    }
+
+    #[test]
+    fn weight_overflow() {
+        let err = expect_error("root: \"a\":9999999999\n");
+        assert_eq!((err.line, err.col), (1, 10));
+    }
+
+    #[test]
+    fn weight_zero_is_rejected() {
+        let err = expect_error("root: \"a\":0\n");
+        assert_eq!((err.line, err.col), (1, 10));
+    }
+
+    #[test]
+    fn duplicate_weight_on_one_alternative() {
+        let err = expect_error("root: \"a\":1:2\n");
+        assert_eq!((err.line, err.col), (1, 12));
+    }
+
+    #[test]
+    fn unexpected_character() {
+        let err = expect_error("root: %\n");
+        assert_eq!((err.line, err.col), (1, 7));
+    }
+
+    #[test]
+    fn undefined_reference_points_at_the_reference() {
+        let err = expect_error("root: <missing>\n");
+        assert_eq!((err.line, err.col), (1, 7));
+    }
+
+    #[test]
+    fn rule_name_must_start_with_a_letter_or_underscore() {
+        let err = expect_error("123abc: \"a\"\n");
+        assert_eq!((err.line, err.col), (1, 1));
+    }
+
+    #[test]
+    fn parses_a_well_formed_grammar() {
+        let grammar = parse(
+            "root: <first> \" \" <last>\n\nfirst: \"Bran\" | \"Eddard\"\n\nlast: \"Stark\":3 | \"Snow\"\n",
+        )
+        .expect("well-formed grammar should parse");
+        assert_eq!(grammar.get("root").unwrap().len(), 1);
+        assert_eq!(grammar.get("last").unwrap()[0].weight, 3);
+    }
+}
